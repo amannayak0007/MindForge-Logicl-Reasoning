@@ -1,8 +1,19 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { QuestionData } from "../types";
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization of Gemini - only when needed
+let ai: GoogleGenAI | null = null;
+
+const getAI = (): GoogleGenAI => {
+  if (!ai) {
+    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.");
+    }
+    ai = new GoogleGenAI({ apiKey });
+  }
+  return ai;
+};
 
 const questionSchema: Schema = {
   type: Type.OBJECT,
@@ -76,7 +87,8 @@ export const generateQuestion = async (level: number): Promise<QuestionData> => 
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const aiInstance = getAI();
+    const response = await aiInstance.models.generateContent({
       model,
       contents: prompt,
       config: {

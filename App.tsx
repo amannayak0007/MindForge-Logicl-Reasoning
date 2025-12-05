@@ -16,6 +16,7 @@ const App: React.FC = () => {
 
   const [currentQuestion, setCurrentQuestion] = useState<QuestionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
   // Load High Score
   useEffect(() => {
@@ -27,11 +28,24 @@ const App: React.FC = () => {
 
   const fetchNewQuestion = useCallback(async (level: number) => {
     setIsLoading(true);
+    setHasError(false);
     try {
       const question = await generateQuestion(level);
       setCurrentQuestion(question);
+      setHasError(false);
     } catch (error) {
-      console.error("Failed to load question");
+      console.error("Failed to load question:", error);
+      setHasError(true);
+      // Show fallback question even on error
+      setCurrentQuestion({
+        category: "Error",
+        questionText: "Unable to connect to the question service. Please check your API configuration.",
+        options: ["Retry", "Check API Key", "Contact Support", "Refresh Page"],
+        correctAnswer: "Refresh Page",
+        explanation: "The application requires a valid Gemini API key to generate questions. Please ensure GEMINI_API_KEY is set in your environment variables.",
+        hint: "Check the browser console for more details.",
+        difficulty: 1,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -39,7 +53,11 @@ const App: React.FC = () => {
 
   // Initial Load
   useEffect(() => {
-    fetchNewQuestion(1);
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      fetchNewQuestion(1);
+    }, 100);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -106,14 +124,31 @@ const App: React.FC = () => {
         {isLoading && !currentQuestion ? (
           <LoadingSpinner />
         ) : currentQuestion ? (
-          <GameCard 
-            question={currentQuestion} 
-            onAnswer={handleAnswer} 
-            onNext={handleNext}
-            disabled={isLoading}
-          />
+          <>
+            {hasError && (
+              <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                <p className="text-red-300 text-sm">
+                  ⚠️ API Error: Check console for details. Using fallback question.
+                </p>
+              </div>
+            )}
+            <GameCard 
+              question={currentQuestion} 
+              onAnswer={handleAnswer} 
+              onNext={handleNext}
+              disabled={isLoading}
+            />
+          </>
         ) : (
-           <div className="text-center text-red-400">Error loading. Please refresh.</div>
+           <div className="glass-panel p-8 rounded-3xl text-center">
+             <div className="text-red-400 mb-4">Error loading. Please refresh.</div>
+             <button 
+               onClick={() => fetchNewQuestion(1)}
+               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold"
+             >
+               Retry
+             </button>
+           </div>
         )}
       </div>
 
