@@ -34,24 +34,11 @@ const questionSchema: Schema = {
     },
     visualSVG: {
       type: Type.STRING,
-      description: "Optional. REQUIRED if category is Visual Reasoning or Figure Series. Raw SVG code (starting with <svg and ending with </svg>) depicting the puzzle. Viewbox '0 0 300 200' recommended for series. Do not include markdown code blocks.",
+      description: "Optional. Only if the category is 'Visual Reasoning' or 'Figure Series'. Provide raw SVG code (starting with <svg and ending with </svg>) depicting the puzzle. Do not include markdown code blocks. The SVG should be viewbox '0 0 200 200'. If not applicable, leave empty.",
     },
   },
   required: ["category", "questionText", "options", "correctAnswer", "explanation", "hint"],
 };
-
-const CATEGORIES = [
-  "Analogy (Tree : Forest :: Book : ?)",
-  "Classification / Odd One Out",
-  "Series Completion (Numbers or Letters)",
-  "Coding-Decoding",
-  "Blood Relations",
-  "Direction Sense",
-  "Logical Venn Diagrams (Text based description)",
-  "Mathematical Puzzles (Age, probability, work/time)",
-  "Syllogisms / Statement & Conclusion",
-  "Visual Reasoning / Figure Series (Geometric patterns, shape sequences)"
-];
 
 export const generateQuestion = async (level: number): Promise<QuestionData> => {
   const model = "gemini-2.5-flash";
@@ -63,46 +50,29 @@ export const generateQuestion = async (level: number): Promise<QuestionData> => 
   if (level > 20) difficultyDescriptor = "Expert";
   if (level > 30) difficultyDescriptor = "Genius";
 
-  // Pre-select category to allow specific prompting
-  const selectedCategoryRaw = CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-  const isVisualCategory = selectedCategoryRaw.includes("Visual") || selectedCategoryRaw.includes("Figure");
-
-  let specificInstructions = "";
-
-  if (isVisualCategory) {
-    specificInstructions = `
-    *** VISUAL REASONING MODE ACTIVE ***
-    1. You MUST provide valid SVG code in the 'visualSVG' field.
-    2. The SVG must be raw code starting with '<svg' and ending with '</svg>'.
-    3. DO NOT wrap the SVG in markdown code blocks (no \`\`\`).
-    4. SVG DESIGN RULES:
-       - Use 'viewBox="0 0 300 150"' for sequences or '0 0 200 200' for grids.
-       - Use HIGH CONTRAST: stroke="white" stroke-width="2" fill="none" (or bright colors). Background will be dark slate.
-       - Text inside SVG must be white (fill="white").
-       - The puzzle should visually depict the pattern (e.g., rotating shapes, missing segment).
-    5. 'questionText' should be simple, e.g., "Which shape replaces the question mark?"
-    `;
-  } else {
-    specificInstructions = `
-    *** TEXT ONLY MODE ***
-    1. Set 'visualSVG' field to null or empty string.
-    2. Rely entirely on text description.
-    `;
-  }
-
   const prompt = `
     You are a master logic puzzle generator for a game called "MindForge".
     Generate a SINGLE unique reasoning question for Level ${level} (${difficultyDescriptor} difficulty).
     
-    The selected category is: **${selectedCategoryRaw}**
+    Randomly select ONE category from this list, ensuring variety:
+    1. Analogy (Tree : Forest :: Book : ?)
+    2. Classification / Odd One Out
+    3. Series Completion (Numbers or Letters, e.g., ab_bc_c_ba_c)
+    4. Coding-Decoding
+    5. Blood Relations
+    6. Direction Sense
+    7. Logical Venn Diagrams (Text based description)
+    8. Mathematical Puzzles (Age, probability, work/time)
+    9. Syllogisms / Statement & Conclusion
+    10. Visual Reasoning (Geometric patterns, shape series)
 
-    ${specificInstructions}
-
-    General Constraints:
+    Constraints:
     - Provide 4 distinct options.
     - Ensure the logic is sound and the answer is unambiguous.
     - Include a 'hint' that gives a small nudge.
-    - Output strictly valid JSON.
+    - For "Visual Reasoning", try to create a simple SVG representation in the 'visualSVG' field if possible, or describe the visual pattern clearly in text.
+    - For "Series Completion", make sure the pattern requires some thought but is solvable.
+    - Do NOT wrap the JSON in markdown blocks.
   `;
 
   try {
@@ -113,24 +83,22 @@ export const generateQuestion = async (level: number): Promise<QuestionData> => 
         responseMimeType: "application/json",
         responseSchema: questionSchema,
         systemInstruction: "You are a rigid game engine that outputs valid JSON only.",
-        // Increase budget for visual tasks to ensure SVG correctness
-        thinkingConfig: { thinkingBudget: isVisualCategory || level > 15 ? 1024 : 0 } 
+        // Adjust thinking budget based on difficulty roughly
+        thinkingConfig: { thinkingBudget: level > 15 ? 1024 : 0 } 
       },
     });
 
     if (response.text) {
       const data = JSON.parse(response.text) as QuestionData;
-      // Safety fallbacks ensuring category matches what we asked for
-      if (!data.category) data.category = selectedCategoryRaw.split(' ')[0];
       return data;
     } else {
       throw new Error("Empty response from Gemini");
     }
   } catch (error) {
     console.error("Gemini API Error:", error);
-    // Fallback question in case of API failure
+    // Fallback question in case of API failure to prevent app crash
     return {
-      category: "Series Completion",
+      category: "Fallback",
       questionText: "Which number comes next: 2, 4, 8, 16, ...?",
       options: ["20", "24", "32", "64"],
       correctAnswer: "32",
