@@ -8,6 +8,20 @@ interface GameCardProps {
   disabled: boolean;
 }
 
+// Utility function to play tap sound
+const playTapSound = () => {
+  try {
+    const audio = new Audio('/tile.wav');
+    audio.volume = 0.5; // Set volume to 50%
+    audio.play().catch((error) => {
+      // Silently handle errors (e.g., user hasn't interacted with page yet)
+      console.debug('Could not play sound:', error);
+    });
+  } catch (error) {
+    console.debug('Sound playback error:', error);
+  }
+};
+
 export const GameCard: React.FC<GameCardProps> = ({ question, onAnswer, onNext, disabled }) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -22,6 +36,8 @@ export const GameCard: React.FC<GameCardProps> = ({ question, onAnswer, onNext, 
 
   const handleSelect = (option: string) => {
     if (disabled || isSubmitted) return;
+    
+    playTapSound();
     
     setSelectedOption(option);
     setIsSubmitted(true);
@@ -57,7 +73,10 @@ export const GameCard: React.FC<GameCardProps> = ({ question, onAnswer, onNext, 
         {/* Hint Button */}
         {!isSubmitted && (
           <button 
-            onClick={() => setShowHint(!showHint)}
+            onClick={() => {
+              playTapSound();
+              setShowHint(!showHint);
+            }}
             className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 transition-colors"
             title="Get a hint"
           >
@@ -147,7 +166,10 @@ export const GameCard: React.FC<GameCardProps> = ({ question, onAnswer, onNext, 
           </div>
           
           <button
-            onClick={onNext}
+            onClick={() => {
+              playTapSound();
+              onNext();
+            }}
             className="w-full mt-4 py-4 rounded-xl bg-white text-slate-900 font-bold text-lg hover:bg-slate-200 transition-colors shadow-lg flex items-center justify-center space-x-2"
           >
             <span>Next Question</span>
